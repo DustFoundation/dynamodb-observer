@@ -3,9 +3,13 @@ import DDB, {
   DynamoDBClientConfig as OriginDynamoDBClientConfig,
 } from '@aws-sdk/client-dynamodb';
 
-function defaultHook(hashKeys: string[], capacityUnits: number): void {
-  console.log(`[Capacity Units ${capacityUnits}] Hash Keys: [${hashKeys.join(', ')}]`);
-}
+const defaultHook: NonNullable<DynamoDBConfig['hook']> = (
+  method: keyof OriginDynamoDB,
+  capacityUnits: number,
+  hashKeys: string[],
+) => {
+  console.log(`[${method}] [CU: ${capacityUnits}] [Hash Keys: ${hashKeys.join(', ')}]`);
+};
 
 export class DynamoDB extends OriginDynamoDB {
   private readonly hook: NonNullable<DynamoDBConfig['hook']>;
@@ -90,7 +94,7 @@ export class DynamoDB extends OriginDynamoDB {
     return this.handler('batchExecuteStatement', args);
   }
 
-  private async handler<T extends BaseRequest>(method: keyof DynamoDB, args: any[]): Promise<T> {
+  private async handler<T extends BaseRequest>(method: keyof OriginDynamoDB, args: any[]): Promise<T> {
     if (!args[0].ReturnConsumedCapacity) args[0].ReturnConsumedCapacity = 'TOTAL';
 
     // @ts-expect-error
@@ -125,10 +129,9 @@ export class DynamoDB extends OriginDynamoDB {
         if (!key) return;
 
         await Promise.resolve(
-          this.hook(
-            [...new Set(items.map((i) => i[key]['S'] || i[key]['N'] || i[key]['B']?.toString() || ''))],
-            capacityUnits,
-          ),
+          this.hook(method, capacityUnits, [
+            ...new Set(items.map((i) => i[key]['S'] || i[key]['N'] || i[key]['B']?.toString() || '')),
+          ]),
         ).catch((e) => console.warn('Error when get capacity.', e));
       });
     } catch (e) {
@@ -140,7 +143,7 @@ export class DynamoDB extends OriginDynamoDB {
 }
 
 export interface DynamoDBConfig extends OriginDynamoDBClientConfig {
-  hook?: (hashKeys: string[], capacityUnits: number) => void | Promise<void>;
+  hook?: (method: keyof OriginDynamoDB, capacityUnits: number, hashKeys: string[]) => void | Promise<void>;
   keys?: Record<string, { hashKey: string }>;
 }
 
