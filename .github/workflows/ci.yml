@@ -28,6 +28,11 @@ jobs:
           node-version: 16
           cache: npm
 
+      - uses: rrainn/dynamodb-action@v2.0.1
+        with:
+          port: 5000
+          cors: "*"
+
       - name: Install dependencies
         run: npm ci
 

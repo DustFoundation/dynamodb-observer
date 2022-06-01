@@ -22,38 +22,49 @@ export class DynamoDB extends OriginDynamoDB {
   }
 
   public async getItem(...args: [DDB.GetItemCommandInput, ...any]): Promise<DDB.GetItemCommandOutput> {
-    return this.handler('getItem', args);
+    return this.handler('getItem', args, { [args[0].TableName!]: [args[0].Key!] });
   }
 
   public async putItem(...args: [DDB.PutItemCommandInput, ...any]): Promise<DDB.PutItemCommandOutput> {
-    if (!args[0].ReturnValues) args[0].ReturnValues = 'ALL_OLD';
-    return this.handler('putItem', args);
+    return this.handler('putItem', args, { [args[0].TableName!]: [args[0].Item!] });
   }
 
   public async updateItem(
     ...args: [DDB.UpdateItemCommandInput, ...any]
   ): Promise<DDB.UpdateItemCommandOutput> {
-    if (!args[0].ReturnValues) args[0].ReturnValues = 'ALL_NEW';
-    return this.handler('updateItem', args);
+    return this.handler('updateItem', args, { [args[0].TableName!]: [args[0].Key!] });
   }
 
   public async deleteItem(
     ...args: [DDB.DeleteItemCommandInput, ...any]
   ): Promise<DDB.DeleteItemCommandOutput> {
-    if (!args[0].ReturnValues) args[0].ReturnValues = 'ALL_OLD';
-    return this.handler('deleteItem', args);
+    return this.handler('deleteItem', args, { [args[0].TableName!]: [args[0].Key!] });
   }
 
   public async batchGetItem(
     ...args: [DDB.BatchGetItemCommandInput, ...any]
   ): Promise<DDB.BatchGetItemCommandOutput> {
-    return this.handler('batchGetItem', args);
+    return this.handler(
+      'batchGetItem',
+      args,
+      Object.fromEntries(Object.entries(args[0].RequestItems!).map(([key, value]) => [key, value.Keys!])),
+    );
   }
 
   public async batchWriteItem(
     ...args: [DDB.BatchWriteItemCommandInput, ...any]
   ): Promise<DDB.BatchWriteItemCommandOutput> {
-    return this.handler('batchWriteItem', args);
+    return this.handler(
+      'batchWriteItem',
+      args,
+      Object.fromEntries(
+        Object.entries(args[0].RequestItems!).map(([key, value]) => [
+          key,
+          // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
+          value.flatMap((value) => [value.PutRequest?.Item!, value.DeleteRequest?.Key!].filter((_) => _)),
+        ]),
+      ),
+    );
   }
 
   public async query(...args: [DDB.QueryCommandInput, ...any]): Promise<DDB.QueryCommandOutput> {
@@ -61,40 +72,46 @@ export class DynamoDB extends OriginDynamoDB {
   }
 
   public async scan(...args: [DDB.ScanCommandInput, ...any]): Promise<DDB.ScanCommandOutput> {
-    return this.handler('query', args);
+    return this.handler('scan', args);
   }
 
   public async transactGetItems(
     ...args: [DDB.TransactGetItemsCommandInput, ...any]
   ): Promise<DDB.TransactGetItemsCommandOutput> {
-    return this.handler('transactGetItems', args);
+    return this.handler(
+      'transactGetItems',
+      args,
+      args[0].TransactItems!.reduce((acc, item) => {
+        const TableName = item.Get!.TableName!;
+        const Key = item.Get!.Key!;
+        if (!acc[TableName]) acc[TableName] = [];
+        acc[TableName].push(Key);
+        return acc;
+      }, {} as Record<string, Item[]>),
+    );
   }
 
   public async transactWriteItems(
     ...args: [DDB.TransactWriteItemsCommandInput, ...any]
   ): Promise<DDB.TransactWriteItemsCommandOutput> {
-    return this.handler('transactWriteItems', args);
+    return this.handler(
+      'transactWriteItems',
+      args,
+      args[0].TransactItems!.reduce((acc, item) => {
+        const obj: any = (item.Put ?? item.Update ?? item.Delete ?? item.ConditionCheck)!;
+        const { TableName, Item, Key } = obj;
+        if (!acc[TableName]) acc[TableName] = [];
+        acc[TableName].push(Item ?? Key);
+        return acc;
+      }, {} as Record<string, Item[]>),
+    );
   }
 
-  public async executeTransaction(
-    ...args: [DDB.ExecuteTransactionCommandInput, ...any]
-  ): Promise<DDB.ExecuteTransactionCommandOutput> {
-    return this.handler('executeTransaction', args);
-  }
-
-  public async executeStatement(
-    ...args: [DDB.ExecuteStatementCommandInput, ...any]
-  ): Promise<DDB.ExecuteStatementCommandOutput> {
-    return this.handler('executeStatement', args);
-  }
-
-  public async batchExecuteStatement(
-    ...args: [DDB.BatchExecuteStatementCommandInput, ...any]
-  ): Promise<DDB.BatchExecuteStatementCommandOutput> {
-    return this.handler('batchExecuteStatement', args);
-  }
-
-  private async handler<T extends BaseRequest>(method: keyof OriginDynamoDB, args: any[]): Promise<T> {
+  private async handler<T extends BaseResponse>(
+    method: keyof OriginDynamoDB,
+    args: any[],
+    reqItems?: Record<string, Item[]>,
+  ): Promise<T> {
     if (!args[0].ReturnConsumedCapacity) args[0].ReturnConsumedCapacity = 'TOTAL';
 
     // @ts-expect-error
@@ -111,17 +128,19 @@ export class DynamoDB extends OriginDynamoDB {
       Cap.forEach(async (cap) => {
         const tableName = cap.TableName;
         const capacityUnits = cap.CapacityUnits;
-        const items = response.Item
-          ? [response.Item]
-          : response.Attributes
-          ? [response.Attributes]
-          : response.Items
-          ? response.Items
-          : response.Responses
-          ? Array.isArray(response.Responses)
-            ? response.Responses.map((r) => r.Item!)
-            : Object.values(response.Responses).flatMap((r) => r.map((r) => r))
-          : [];
+        const items =
+          reqItems?.[tableName!] ??
+          (response.Item
+            ? [response.Item]
+            : response.Items
+            ? response.Items
+            : response.Attributes
+            ? [response.Attributes]
+            : response.Responses
+            ? Array.isArray(response.Responses)
+              ? response.Responses.map((r) => r.Item!)
+              : Object.values(response.Responses).flatMap((r) => r.map((r) => r))
+            : []);
 
         if (!(tableName && capacityUnits && items.length)) return;
 
@@ -147,7 +166,7 @@ export interface DynamoDBConfig extends OriginDynamoDBClientConfig {
   keys?: Record<string, { hashKey: string }>;
 }
 
-type BaseRequest = {
+type BaseResponse = {
   ConsumedCapacity?: DDB.ConsumedCapacity | DDB.ConsumedCapacity[];
   Attributes?: Item;
   Item?: Item;

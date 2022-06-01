@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json.schemastore.org/mocharc",
+  "slow": 2500,
+  "timeout": 5000,
+  "exit": true
+}
