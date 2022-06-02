@@ -116,45 +116,46 @@ export class DynamoDB extends OriginDynamoDB {
 
     // @ts-expect-error
     const response = (await super[method](...args)) as T;
+    if (response) {
+      try {
+        const Cap = response.ConsumedCapacity
+          ? Array.isArray(response.ConsumedCapacity)
+            ? response.ConsumedCapacity
+            : [response.ConsumedCapacity]
+          : undefined;
+        if (!Cap) return response;
 
-    try {
-      const Cap = response.ConsumedCapacity
-        ? Array.isArray(response.ConsumedCapacity)
-          ? response.ConsumedCapacity
-          : [response.ConsumedCapacity]
-        : undefined;
-      if (!Cap) return response;
+        Cap.forEach(async (cap) => {
+          const tableName = cap.TableName;
+          const capacityUnits = cap.CapacityUnits;
+          const items =
+            reqItems?.[tableName!] ??
+            (response.Item
+              ? [response.Item]
+              : response.Items
+              ? response.Items
+              : response.Attributes
+              ? [response.Attributes]
+              : response.Responses
+              ? Array.isArray(response.Responses)
+                ? response.Responses.map((r) => r.Item!)
+                : Object.values(response.Responses).flatMap((r) => r.map((r) => r))
+              : []);
 
-      Cap.forEach(async (cap) => {
-        const tableName = cap.TableName;
-        const capacityUnits = cap.CapacityUnits;
-        const items =
-          reqItems?.[tableName!] ??
-          (response.Item
-            ? [response.Item]
-            : response.Items
-            ? response.Items
-            : response.Attributes
-            ? [response.Attributes]
-            : response.Responses
-            ? Array.isArray(response.Responses)
-              ? response.Responses.map((r) => r.Item!)
-              : Object.values(response.Responses).flatMap((r) => r.map((r) => r))
-            : []);
+          if (!(tableName && capacityUnits && items.length)) return;
 
-        if (!(tableName && capacityUnits && items.length)) return;
+          const key = this.keys[tableName]?.hashKey;
+          if (!key) return;
 
-        const key = this.keys[tableName]?.hashKey;
-        if (!key) return;
-
-        await Promise.resolve(
-          this.hook(method, capacityUnits, [
-            ...new Set(items.map((i) => i[key]['S'] || i[key]['N'] || i[key]['B']?.toString() || '')),
-          ]),
-        ).catch((e) => console.warn('Error when get capacity.', e));
-      });
-    } catch (e) {
-      console.warn('Error when get capacity.', e);
+          await Promise.resolve(
+            this.hook(method, capacityUnits, [
+              ...new Set(items.map((i) => i[key]['S'] || i[key]['N'] || i[key]['B']?.toString() || '')),
+            ]),
+          ).catch((e) => console.warn('Error when get capacity.', e));
+        });
+      } catch (e) {
+        console.warn('Error when get capacity.', e);
+      }
     }
 
     return response;
