@@ -1,14 +1,13 @@
-import DDB, {
-  DynamoDB as OriginDynamoDB,
-  DynamoDBClientConfig as OriginDynamoDBClientConfig,
-} from '@aws-sdk/client-dynamodb';
+import type { DynamoDBClientConfig as OriginDynamoDBClientConfig } from '@aws-sdk/client-dynamodb';
+import type DDB from '@aws-sdk/client-dynamodb';
+import { DynamoDB as OriginDynamoDB } from '@aws-sdk/client-dynamodb';
 
 const defaultHook: NonNullable<DynamoDBConfig['hook']> = (
   method: keyof OriginDynamoDB,
   capacityUnits: number,
-  hashKeys: string[],
+  keys: string[],
 ) => {
-  console.log(`[${method}] [CU: ${capacityUnits}] [Hash Keys: ${hashKeys.join(', ')}]`);
+  console.log(`[${method}] [CU: ${capacityUnits}] [Keys: ${keys.join(', ')}]`);
 };
 
 export class DynamoDB extends OriginDynamoDB {
@@ -84,7 +83,9 @@ export class DynamoDB extends OriginDynamoDB {
       args[0].TransactItems!.reduce((acc, item) => {
         const TableName = item.Get!.TableName!;
         const Key = item.Get!.Key!;
-        if (!acc[TableName]) acc[TableName] = [];
+        if (!acc[TableName]) {
+          acc[TableName] = [];
+        }
         acc[TableName].push(Key);
         return acc;
       }, {} as Record<string, Item[]>),
@@ -100,7 +101,9 @@ export class DynamoDB extends OriginDynamoDB {
       args[0].TransactItems!.reduce((acc, item) => {
         const obj: any = (item.Put ?? item.Update ?? item.Delete ?? item.ConditionCheck)!;
         const { TableName, Item, Key } = obj;
-        if (!acc[TableName]) acc[TableName] = [];
+        if (!acc[TableName]) {
+          acc[TableName] = [];
+        }
         acc[TableName].push(Item ?? Key);
         return acc;
       }, {} as Record<string, Item[]>),
@@ -112,7 +115,9 @@ export class DynamoDB extends OriginDynamoDB {
     args: any[],
     reqItems?: Record<string, Item[]>,
   ): Promise<T> {
-    if (!args[0].ReturnConsumedCapacity) args[0].ReturnConsumedCapacity = 'TOTAL';
+    if (!args[0].ReturnConsumedCapacity) {
+      args[0].ReturnConsumedCapacity = 'TOTAL';
+    }
 
     // @ts-expect-error
     const response = (await super[method](...args)) as T;
@@ -123,7 +128,9 @@ export class DynamoDB extends OriginDynamoDB {
             ? response.ConsumedCapacity
             : [response.ConsumedCapacity]
           : undefined;
-        if (!Cap) return response;
+        if (!Cap) {
+          return response;
+        }
 
         Cap.forEach(async (cap) => {
           const tableName = cap.TableName;
@@ -132,7 +139,8 @@ export class DynamoDB extends OriginDynamoDB {
             reqItems?.[tableName!] ??
             (response.Item
               ? [response.Item]
-              : response.Items
+              : // eslint-disable-next-line unicorn/prefer-logical-operator-over-ternary
+              response.Items
               ? response.Items
               : response.Attributes
               ? [response.Attributes]
@@ -142,10 +150,14 @@ export class DynamoDB extends OriginDynamoDB {
                 : Object.values(response.Responses).flatMap((r) => r.map((r) => r))
               : []);
 
-          if (!(tableName && capacityUnits && items.length)) return;
+          if (!(tableName && capacityUnits && items.length)) {
+            return;
+          }
 
-          const key = this.keys[tableName]?.hashKey;
-          if (!key) return;
+          const key = this.keys[tableName];
+          if (!key) {
+            return;
+          }
 
           await Promise.resolve(
             this.hook(method, capacityUnits, [
@@ -163,8 +175,8 @@ export class DynamoDB extends OriginDynamoDB {
 }
 
 export interface DynamoDBConfig extends OriginDynamoDBClientConfig {
-  hook?: (method: keyof OriginDynamoDB, capacityUnits: number, hashKeys: string[]) => void | Promise<void>;
-  keys?: Record<string, { hashKey: string }>;
+  hook?: (method: keyof OriginDynamoDB, capacityUnits: number, keys: string[]) => void | Promise<void>;
+  keys?: Record<string, string>;
 }
 
 type BaseResponse = {

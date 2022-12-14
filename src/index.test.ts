@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import { randomUUID } from 'node:crypto';
-import { DynamoDB, DynamoDBConfig } from '.';
+import type { DynamoDBConfig } from '.';
+import { DynamoDB } from '.';
 
 describe('DynamoDB', () => {
   let ddb: DynamoDB;
@@ -9,7 +10,7 @@ describe('DynamoDB', () => {
 
   beforeEach(async () => {
     ddb = new DynamoDB({
-      keys: { [TableName]: { hashKey: 'hashKey' }, [TableNameSecond]: { hashKey: 'hashKey' } },
+      keys: { [TableName]: 'hashKey', [TableNameSecond]: 'hashKey' },
       region: 'eu-central-1',
       endpoint: 'http://localhost:5000',
       credentials: {
