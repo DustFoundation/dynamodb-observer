@@ -21,7 +21,7 @@ import { DynamoDB } from '@dustfoundation/dynamodb-observer';
 
 const client = new DynamoDB({
   region: 'eu-central-1',
-  keys: { ['table-name']: { hashKey: "userId" } },
+  keys: { ['table-name']: 'userId' },
 });
 ```
 
@@ -37,7 +37,7 @@ const SomeSchema = new Schema({
 
 const client = new DynamoDB({
   region: 'eu-central-1',
-  keys: { ['table-name']: SomeSchema },
+  keys: { ['table-name']: SomeSchema.hashKey },
 });
 aws.ddb.set(client);
 ```
