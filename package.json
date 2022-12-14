@@ -1,6 +1,6 @@
 {
   "name": "@dustfoundation/dynamodb-observer",
-  "version": "1.0.1",
+  "version": "3.1.1",
   "description": "DynamoDB Observer to monitor Unit Capacity usage",
   "repository": "https://github.com/DustFoundation/dynamodb-observer",
   "main": "dist/index.js",
