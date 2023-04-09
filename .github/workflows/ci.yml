@@ -4,14 +4,14 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - ".github/**"
-      - "*.md"
+      - '.github/**'
+      - '*.md'
 
   pull_request:
     branches: [main]
     paths-ignore:
-      - ".github/**"
-      - "*.md"
+      - '.github/**'
+      - '*.md'
 
   workflow_dispatch:
 
@@ -23,15 +23,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - uses: actions/setup-node@v2
+      - name: Setup Node
+        uses: actions/setup-node@v3
         with:
           node-version: 16
           cache: npm
 
-      - uses: rrainn/dynamodb-action@v2.0.1
+      - name: Start DynamoDB
+        uses: rrainn/dynamodb-action@v3.0.0
         with:
           port: 5000
-          cors: "*"
+          cors: '*'
 
       - name: Install dependencies
         run: npm ci
@@ -40,7 +42,7 @@ jobs:
         run: npm run test
 
       - name: Build
-        run: npm run build
+        run: npm run build -- --noEmit
 
       - name: Lint
         run: npm run lint -- --max-warnings=0
