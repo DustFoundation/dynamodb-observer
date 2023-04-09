@@ -15,7 +15,7 @@
     "test": "mocha -r ts-node/register 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.229.0"
+    "@aws-sdk/client-dynamodb": "^3.309.0"
   },
   "devDependencies": {
     "@dustfoundation/eslint-config": "^3.1.1",
